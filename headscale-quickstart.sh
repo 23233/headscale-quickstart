@@ -2,136 +2,47 @@
 
 cat << "EOF"
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-                                                                                         
-        ██╗  ██╗███████╗ █████╗ ██████╗ ███████╗ ██████╗ █████╗ ██╗     ███████╗
-        ██║  ██║██╔════╝██╔══██╗██╔══██╗██╔════╝██╔════╝██╔══██╗██║     ██╔════╝
-        ███████║█████╗  ███████║██║  ██║███████╗██║     ███████║██║     █████╗  
-        ██╔══██║██╔══╝  ██╔══██║██║  ██║╚════██║██║     ██╔══██║██║     ██╔══╝  
-        ██║  ██║███████╗██║  ██║██████╔╝███████║╚██████╗██║  ██║███████╗███████╗
-        ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝
-
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+一键部署headscale
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EOF
 
+# 在更高版本的docker中 集成了 docker compose
+if command -v docker-compose &>/dev/null; then
+  DOCKER_COMPOSE_COMMAND="docker-compose"
+else
+  DOCKER_COMPOSE_COMMAND="docker compose"
+fi
+
+# 面板的子站地址
+DASHBOARD_SUBDOMAIN="dashboard"
+# 对应api的子站地址
+API_SUBDOMAIN="api"
 
 check_if_root() {
     if [ $(id -u) -ne 0 ]; then
-    echo "This script must be run as root"
+    echo "该脚本必须以root用户身份运行"
     exit 1
     fi
 }
 
 check_dependencies() {
-    echo "checking dependencies..."
+    echo "正在检查依赖项..."
 
-    OS=$(uname)
-
-    if [ -f /etc/debian_version ]; then
-        dependencies="jq docker.io docker-compose"
-        update_cmd='apt update'
-        install_cmd='apt-get install -y'
-    elif [ -f /etc/alpine-release ]; then
-        dependencies="jq docker.io docker-compose"
-        update_cmd='apk update'
-        install_cmd='apk --update add'
-    elif [ -f /etc/centos-release ]; then
-        dependencies="jq docker.io docker-compose"
-        update_cmd='yum update'
-        install_cmd='yum install -y'
-    elif [ -f /etc/fedora-release ]; then
-        dependencies="jq docker.io docker-compose"
-        update_cmd='dnf update'
-        install_cmd='dnf install -y'
-    elif [ -f /etc/redhat-release ]; then
-        dependencies="jq docker.io docker-compose"
-        update_cmd='yum update'
-        install_cmd='yum install -y'
-    elif [ -f /etc/arch-release ]; then
-            dependecies="jq docker.io docker-compose"
-        update_cmd='pacman -Sy'
-        install_cmd='pacman -S --noconfirm'
-    elif [ "${OS}" = "FreeBSD" ]; then
-        dependencies="wget jq docker.io docker-compose"
-        update_cmd='pkg update'
-        install_cmd='pkg install -y'
-    elif [ -f /etc/turris-version ]; then
-        dependencies="bash jq docker.io docker-compose"
-        OS="TurrisOS"
-        update_cmd='opkg update'	
-        install_cmd='opkg install'
-    elif [ -f /etc/openwrt_release ]; then
-        dependencies="bash jq docker.io docker-compose"ß
-        OS="OpenWRT"
-        update_cmd='opkg update'	
-        install_cmd='opkg install'
-    else
-        install_cmd=''
-    fi
-
-    if [ -z "${install_cmd}" ]; then
-            echo "OS unsupported for automatic dependency install"
-        exit 1
-    fi
-
-    set -- $dependencies
-
-    ${update_cmd}
-
-    while [ -n "$1" ]; do
-        if [ "${OS}" = "FreeBSD" ]; then
-            is_installed=$(pkg check -d $1 | grep "Checking" | grep "done")
-            if [ "$is_installed" != "" ]; then
-                echo "  " $1 is installed
-            else
-                echo "  " $1 is not installed. Attempting install.
-                ${install_cmd} $1
-                sleep 5
-                is_installed=$(pkg check -d $1 | grep "Checking" | grep "done")
-                if [ "$is_installed" != "" ]; then
-                    echo "  " $1 is installed
-                elif [ -x "$(command -v $1)" ]; then
-                    echo "  " $1 is installed
-                else
-                    echo "  " FAILED TO INSTALL $1
-                    echo "  " This may break functionality.
-                fi
-            fi	
+    if ! command -v docker &> /dev/null
+    then
+        echo "Docker未安装。 尝试安装..."
+        if [ -f /etc/debian_version ]; then
+            curl -sSL https://get.daocloud.io/docker | sh
         else
-            if [ "${OS}" = "OpenWRT" ] || [ "${OS}" = "TurrisOS" ]; then
-                is_installed=$(opkg list-installed $1 | grep $1)
-            else
-                is_installed=$(dpkg-query -W --showformat='${Status}\n' $1 | grep "install ok installed")
-            fi
-            if [ "${is_installed}" != "" ]; then
-                echo "    " $1 is installed
-            else
-                echo "    " $1 is not installed. Attempting install.
-                ${install_cmd} $1
-                sleep 5
-                if [ "${OS}" = "OpenWRT" ] || [ "${OS}" = "TurrisOS" ]; then
-                    is_installed=$(opkg list-installed $1 | grep $1)
-                else
-                    is_installed=$(dpkg-query -W --showformat='${Status}\n' $1 | grep "install ok installed")
-                fi
-                if [ "${is_installed}" != "" ]; then
-                    echo "    " $1 is installed
-                elif [ -x "$(command -v $1)" ]; then
-                    echo "  " $1 is installed
-                else
-                    echo "  " FAILED TO INSTALL $1
-                    echo "  " This may break functionality.
-                fi
-            fi
+            echo "操作系统不支持自动安装Docker"
+            exit 1
         fi
-        shift
-    done
+    else
+        echo "Docker已经安装。"
+    fi
 
     echo "-----------------------------------------------------"
-    echo "dependency check complete"
+    echo "依赖项检查完成"
     echo "-----------------------------------------------------"
 
     wait_seconds 3
@@ -147,20 +58,20 @@ wait_seconds() {(
 
 confirm() {(
   while true; do
-      read -p 'Does everything look right? [y/n]: ' yn
+      read -p '是否一切正常 [y/n]: ' yn
       case $yn in
           [Yy]* ) override="true"; break;;
-          [Nn]* ) echo "exiting..."; exit 1;;
-          * ) echo "Please answer yes or no.";;
+          [Nn]* ) echo "退出..."; exit 1;;
+          * ) echo "请回答 yes 或者 no.";;
       esac
   done
 )}
 
 pull_config() {
-    COMPOSE_URL="https://raw.githubusercontent.com/SimCubeLtd/headscale-quickstart/main/docker-compose.yaml" 
-    CADDY_URL="https://raw.githubusercontent.com/SimCubeLtd/headscale-quickstart/main/Caddyfile"
-    CONFIG_URL="https://raw.githubusercontent.com/SimCubeLtd/headscale-quickstart/main/config.yaml"
-    echo "Pulling config files..."
+    COMPOSE_URL="https://raw.githubusercontent.com/23233/headscale-quickstart/main/docker-compose.yaml" 
+    CADDY_URL="https://raw.githubusercontent.com/23233/headscale-quickstart/main/Caddyfile"
+    CONFIG_URL="https://raw.githubusercontent.com/23233/headscale-quickstart/main/config.yaml"
+    echo "正在拉取配置文件..."
     mkdir -p ./config
     mkdir -p ./data
     wget -O ./docker-compose.yml $COMPOSE_URL && wget -O ./Caddyfile $CADDY_URL && wget -O ./config/config.yaml $CONFIG_URL
@@ -169,20 +80,20 @@ pull_config() {
 
 test_connection() {
     local RETRY_URL=$1
-    echo "Testing Caddy setup (please be patient, this may take 1-2 minutes)"
+    echo "正在测试Caddy设置(请耐心等待，可能需要1-2分钟)"
     for i in 1 2 3 4 5 6 7 8
     do
     curlresponse=$(curl -vIs $RETRY_URL 2>&1)
 
     if [[ "$i" == 8 ]]; then
-    echo "    Caddy is having an issue setting up certificates, please investigate (docker logs caddy)"
-    echo "    Exiting..."
+    echo "    Caddy正在设置证书时遇到问题，请检查(docker logs caddy)"
+    echo "    退出..."
     exit 1
     elif [[ "$curlresponse" == *"failed to verify the legitimacy of the server"* ]]; then
-    echo "    Certificates not yet configured, retrying..."
+    echo "    证书尚未配置，正在重试..."
 
     elif [[ "$curlresponse" == *"left intact"* ]]; then
-    echo "    Certificates ok"
+    echo "    证书配置完成"
     break
     else
     secs=$(($i*5+10))
@@ -203,37 +114,39 @@ install() {
     pushd $CONFIG_DIR
 
     echo "-----------------------------------------------------"
-    echo "Would you like to use your own domain for headscale, or an auto-generated domain?"
-    echo "To use your own domain, add a Wildcard DNS record (e.x: *.headscale.example.com) pointing to $SERVER_PUBLIC_IP"
+    echo "您想为headscale使用自己的域名，还是自动生成域名？"
+    echo "如果使用自己的域名，请添加泛域名解析（例如：*.headscale.example.com），指向 $SERVER_PUBLIC_IP"
     echo "-----------------------------------------------------"
-    select domain_option in "Auto Generated ($HEADSCALE_BASE_DOMAIN)" "Custom Domain (e.x: headscale.example.com)"; do
-    case $REPLY in
-        1)
-        echo "using $HEADSCALE_BASE_DOMAIN for base domain"
-        DOMAIN_TYPE="auto"
-        break
-        ;;      
-        2)
-        read -p "Enter Custom Domain (make sure  *.domain points to $SERVER_PUBLIC_IP first): " domain
-        HEADSCALE_BASE_DOMAIN=$domain
-        echo "using $HEADSCALE_BASE_DOMAIN"
-        DOMAIN_TYPE="custom"
-        break
-        ;;
-        *) echo "invalid option $REPLY";;
-    esac
+    select domain_option in "自动生成域名（$HEADSCALE_BASE_DOMAIN）" "自定义域名（例如：headscale.example.com）"; do
+        case $REPLY in
+            1)
+            echo "使用 $HEADSCALE_BASE_DOMAIN 作为基本域名"
+            DOMAIN_TYPE="auto"
+            break
+            ;;
+            2)
+            read -p "输入自定义域名（确保 *.domain 解析指向 $SERVER_PUBLIC_IP）：" domain
+            HEADSCALE_BASE_DOMAIN=$domain
+            echo "使用 $HEADSCALE_BASE_DOMAIN"
+            DOMAIN_TYPE="custom"
+            break
+            ;;
+            *) echo "无效选项 $REPLY";;
+        esac
     done
 
     wait_seconds 2
 
+
+
     echo "-----------------------------------------------------"
-    echo "The following subdomains will be used:"
-    echo "          dashboard.$HEADSCALE_BASE_DOMAIN"
-    echo "                api.$HEADSCALE_BASE_DOMAIN"
+    echo "将使用以下子域名："
+    echo "          $DASHBOARD_SUBDOMAIN.$HEADSCALE_BASE_DOMAIN"
+    echo "                $API_SUBDOMAIN.$HEADSCALE_BASE_DOMAIN"
     echo "-----------------------------------------------------"
 
     if [[ "$DOMAIN_TYPE" == "custom" ]]; then
-        echo "before continuing, confirm DNS is configured correctly, with records pointing to $SERVER_PUBLIC_IP"
+        echo "在继续之前，请确认 DNS 配置正确，记录指向 $SERVER_PUBLIC_IP"
         confirm
     fi
 
@@ -242,67 +155,73 @@ install() {
     unset GET_EMAIL
     unset RAND_EMAIL
     RAND_EMAIL="$(echo $RANDOM | md5sum  | head -c 16)@email.com"
-    read -p "Email Address for Domain Registration (click 'enter' to use $RAND_EMAIL): " GET_EMAIL
+    read -p "输入域名注册邮箱（按 'enter' 使用 $RAND_EMAIL）：" GET_EMAIL
     if [ -z "$GET_EMAIL" ]; then
-    echo "using rand email"
-    EMAIL="$RAND_EMAIL"
+        echo "使用随机邮箱"
+        EMAIL="$RAND_EMAIL"
     else
-    EMAIL="$GET_EMAIL"
+        EMAIL="$GET_EMAIL"
     fi
 
     wait_seconds 2
 
     echo "-----------------------------------------------------------------"
-    echo "                SETUP ARGUMENTS"
+    echo "                安装参数"
     echo "-----------------------------------------------------------------"
-    echo "        domain: $HEADSCALE_BASE_DOMAIN"
-    echo "         email: $EMAIL"
-    echo "     public ip: $SERVER_PUBLIC_IP"
+    echo "           域名：$HEADSCALE_BASE_DOMAIN"
+    echo "           邮箱：$EMAIL"
+    echo "      公网IP地址：$SERVER_PUBLIC_IP"
     echo "-----------------------------------------------------------------"
-    echo "Confirm Settings for Installation"
+    echo "确认安装设置"
     echo "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
     confirm
 
     echo "-----------------------------------------------------------------"
-    echo "Beginning installation..."
+    echo "开始安装……"
     echo "-----------------------------------------------------------------"
 
     wait_seconds 3
 
     pull_config
 
-    echo "Setting up configuration files..."
+    echo "设置配置文件……"
 
     sed -i "s|HEADSCALE_BASE_DOMAIN|${HEADSCALE_BASE_DOMAIN}|g" ./docker-compose.yml
     sed -i "s|HEADSCALE_BASE_DOMAIN|${HEADSCALE_BASE_DOMAIN}|g" ./Caddyfile
     sed -i "s|HEADSCALE_BASE_DOMAIN|${HEADSCALE_BASE_DOMAIN}|g" ./config/config.yaml
+    # 替换dashboard
+    sed -i "s|DASHBOARD_SUBDOMAIN|${DASHBOARD_SUBDOMAIN}|g" ./Caddyfile
+    # 替换api
+    sed -i "s|API_SUBDOMAIN|${API_SUBDOMAIN}|g" ./Caddyfile
+    sed -i "s|API_SUBDOMAIN|${API_SUBDOMAIN}|g" ./config/config.yaml
+
     sed -i "s|CONFIG_FOLDER|${CONFIG_DIR}|g" ./config/config.yaml
     sed -i "s|YOUR_EMAIL|${EMAIL}|g" ./Caddyfile
-    
-    echo "Starting containers..."
 
-    docker-compose -f ./docker-compose.yml up -d
+    echo "启动容器..."
+
+    ${DOCKER_COMPOSE_COMMAND} -f ./docker-compose.yml up -d
 
     sleep 2
 
-    test_connection "https://api.${HEADSCALE_BASE_DOMAIN}"
+    test_connection "https://${API_SUBDOMAIN}.${HEADSCALE_BASE_DOMAIN}"
 
     wait_seconds 3
 
     set +e
 
-    echo "-----------------------------------------------------------------"
-    echo "-----------------------------------------------------------------"
-    echo "Headscale setup is now complete. You are ready to begin using Headscale."
-    echo "WebUI Running at: https://dashboard.$HEADSCALE_BASE_DOMAIN"
-    echo "Controller Running at: https://api.$HEADSCALE_BASE_DOMAIN"
+    echo "-----------------------------------------------------"
+    echo "-----------------------------------------------------"
+    echo "Headscale设置完成。您现在可以开始使用Headscale。"
+    echo "WebUI运行在：https://$DASHBOARD_SUBDOMAIN.$HEADSCALE_BASE_DOMAIN"
+    echo "控制器运行在：https://$API_SUBDOMAIN.$HEADSCALE_BASE_DOMAIN"
     echo ""
-    echo "To generate an api key for the dashboard, run:"
+    echo "要为仪表板生成API密钥，请运行："
     echo "'sudo docker exec headscale headscale apikeys create'"
-    echo "And copy the api key into the dashboard settings."
-    echo "-----------------------------------------------------------------"
-    echo "-----------------------------------------------------------------"
+    echo "并将API密钥复制到仪表板设置中。"
+    echo "-----------------------------------------------------"
+    echo "-----------------------------------------------------"
 
     popd
 }

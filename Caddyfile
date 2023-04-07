@@ -5,9 +5,9 @@
 }
 
 # Dashboard
-https://dashboard.HEADSCALE_BASE_DOMAIN {
+https://DASHBOARD_SUBDOMAIN.HEADSCALE_BASE_DOMAIN {
         header {
-                Access-Control-Allow-Origin https://dashboard.HEADSCALE_BASE_DOMAIN
+                Access-Control-Allow-Origin https://DASHBOARD_SUBDOMAIN.HEADSCALE_BASE_DOMAIN
 		Access-Control-Allow-Methods "POST, GET, OPTIONS, DELETE"
 	        Access-Control-Allow-Headers *
                 Strict-Transport-Security "max-age=31536000;"
@@ -20,17 +20,17 @@ https://dashboard.HEADSCALE_BASE_DOMAIN {
 }
 
 # API
-https://api.HEADSCALE_BASE_DOMAIN {
+https://API_SUBDOMAIN.HEADSCALE_BASE_DOMAIN {
 @hs-options {
-		host api.HEADSCALE_BASE_DOMAIN
+		host API_SUBDOMAIN.HEADSCALE_BASE_DOMAIN
 		method OPTIONS
 	}
 	@hs-other {
-		host api.HEADSCALE_BASE_DOMAIN
+		host API_SUBDOMAIN.HEADSCALE_BASE_DOMAIN
 	}
 	handle @hs-options {
 		header {
-			Access-Control-Allow-Origin https://dashboard.HEADSCALE_BASE_DOMAIN
+			Access-Control-Allow-Origin https://DASHBOARD_SUBDOMAIN.HEADSCALE_BASE_DOMAIN
 			Access-Control-Allow-Headers *
 			Access-Control-Allow-Methods "POST, GET, OPTIONS, DELETE"
 		}
@@ -38,7 +38,7 @@ https://api.HEADSCALE_BASE_DOMAIN {
 	}
 	handle @hs-other {
 		reverse_proxy http://headscale:8080 {
-			header_down Access-Control-Allow-Origin https://dashboard.HEADSCALE_BASE_DOMAIN
+			header_down Access-Control-Allow-Origin https://DASHBOARD_SUBDOMAIN.HEADSCALE_BASE_DOMAIN
 			header_down Access-Control-Allow-Methods "POST, GET, OPTIONS, DELETE"
 			header_down Access-Control-Allow-Headers *
 		}
